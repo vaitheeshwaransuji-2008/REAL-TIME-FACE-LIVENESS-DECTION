@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 # Install ALL system dependencies in one layer
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --fix-missing \
     build-essential \
     cmake \
     git \
@@ -17,7 +17,8 @@ RUN apt-get update && apt-get install -y \
     liblapack-dev \
     libx11-dev \
     libatlas-base-dev \
-    libboost-all-dev \
+    libboost-python-dev \
+    libboost-thread-dev \
     python3-dev \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
