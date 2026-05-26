@@ -174,7 +174,14 @@ async def websocket_endpoint(websocket: WebSocket):
         "blink_counter": 0,
         "head_left": False,
         "head_right": False,
-        "initial_nose_x": None
+        "initial_nose_x": None,
+        # Latch: once a liveness check passes, hold the result until user resets
+        "latch_status": None,       # "REAL FACE" | "FAKE FACE" | None
+        "latch_match_name": None,
+        "latch_confidence": 0.0,
+        "latch_blinks": 0,
+        "latch_head_left": False,
+        "latch_head_right": False,
     }
     
     try:
@@ -201,6 +208,12 @@ async def websocket_endpoint(websocket: WebSocket):
                 session_state["head_left"] = False
                 session_state["head_right"] = False
                 session_state["initial_nose_x"] = None
+                session_state["latch_status"] = None
+                session_state["latch_match_name"] = None
+                session_state["latch_confidence"] = 0.0
+                session_state["latch_blinks"] = 0
+                session_state["latch_head_left"] = False
+                session_state["latch_head_right"] = False
                 
                 print(f"[WS] Config updated. Mode: {session_state['mode'].upper()}")
                 await websocket.send_json({
@@ -221,11 +234,35 @@ async def websocket_endpoint(websocket: WebSocket):
                 with open(METADATA_FILE, "w") as f:
                     json.dump({}, f)
                 
+                # Also clear latch
+                session_state["latch_status"] = None
+                session_state["latch_match_name"] = None
+                session_state["latch_confidence"] = 0.0
+                session_state["latch_blinks"] = 0
+                session_state["latch_head_left"] = False
+                session_state["latch_head_right"] = False
+                
                 print("[WS] Identity Vault purged.")
                 await websocket.send_json({
                     "type": "vault_purged",
                     "enrolled": []
                 })
+
+            elif msg_type == "reset_latch":
+                # User wants to run a new liveness challenge
+                session_state["latch_status"] = None
+                session_state["latch_match_name"] = None
+                session_state["latch_confidence"] = 0.0
+                session_state["latch_blinks"] = 0
+                session_state["latch_head_left"] = False
+                session_state["latch_head_right"] = False
+                session_state["total_blinks"] = 0
+                session_state["blink_counter"] = 0
+                session_state["head_left"] = False
+                session_state["head_right"] = False
+                session_state["initial_nose_x"] = None
+                print("[WS] Liveness latch reset — new challenge started.")
+                await websocket.send_json({"type": "latch_reset_ack"})
                 
             elif msg_type == "frame":
                 img_b64 = data.get("image")
@@ -253,12 +290,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     "box": None,
                     "landmarks": [],
                     "ear": 0.0,
-                    "blinks": session_state["total_blinks"],
-                    "head_left": session_state["head_left"],
-                    "head_right": session_state["head_right"],
-                    "status": "SCANNING",
-                    "match_name": None,
-                    "confidence": 0.0
+                    "blinks": session_state["latch_blinks"] if session_state["latch_status"] else session_state["total_blinks"],
+                    "head_left": session_state["latch_head_left"] if session_state["latch_status"] else session_state["head_left"],
+                    "head_right": session_state["latch_head_right"] if session_state["latch_status"] else session_state["head_right"],
+                    "status": session_state["latch_status"] if session_state["latch_status"] else "SCANNING",
+                    "match_name": session_state["latch_match_name"],
+                    "confidence": session_state["latch_confidence"]
                 }
                 
                 if len(faces) > 0:
@@ -282,36 +319,38 @@ async def websocket_endpoint(websocket: WebSocket):
                         ear = (leftEAR + rightEAR) / 2.0
                         response_data["ear"] = round(ear, 3)
                         
-                        # Blink counting
-                        if ear < 0.23:
-                            session_state["blink_counter"] += 1
-                        else:
-                            if session_state["blink_counter"] > 0:
-                                session_state["total_blinks"] += 1
-                                session_state["blink_counter"] = 0
-                        response_data["blinks"] = session_state["total_blinks"]
-                        
-                        # Head turn detection using scale-invariant nose-to-jaw ratio
-                        x_nose = shape_np[30][0]
-                        x_left = shape_np[0][0]
-                        x_right = shape_np[16][0]
-                        face_width = x_right - x_left
-                        if face_width > 0:
-                            ratio = (x_nose - x_left) / face_width
-                            if ratio < 0.38:
-                                session_state["head_left"] = True
-                            elif ratio > 0.62:
-                                session_state["head_right"] = True
+                        # Only accumulate liveness signals when no latch is active
+                        if not session_state["latch_status"]:
+                            # Blink counting
+                            if ear < 0.23:
+                                session_state["blink_counter"] += 1
+                            else:
+                                if session_state["blink_counter"] > 0:
+                                    session_state["total_blinks"] += 1
+                                    session_state["blink_counter"] = 0
                             
-                        response_data["head_left"] = session_state["head_left"]
-                        response_data["head_right"] = session_state["head_right"]
+                            # Head turn detection using scale-invariant nose-to-jaw ratio
+                            x_nose = shape_np[30][0]
+                            x_left = shape_np[0][0]
+                            x_right = shape_np[16][0]
+                            face_width = x_right - x_left
+                            if face_width > 0:
+                                ratio = (x_nose - x_left) / face_width
+                                if ratio < 0.38:
+                                    session_state["head_left"] = True
+                                elif ratio > 0.62:
+                                    session_state["head_right"] = True
+
+                        response_data["blinks"] = session_state["latch_blinks"] if session_state["latch_status"] else session_state["total_blinks"]
+                        response_data["head_left"] = session_state["latch_head_left"] if session_state["latch_status"] else session_state["head_left"]
+                        response_data["head_right"] = session_state["latch_head_right"] if session_state["latch_status"] else session_state["head_right"]
                         
                         # Check if complete liveness checklist is satisfied
                         liveness_verified = (session_state["total_blinks"] >= 1 and 
                                              session_state["head_left"] and 
                                              session_state["head_right"])
                         
-                        if liveness_verified:
+                        if liveness_verified and not session_state["latch_status"]:
                             # Only run expensive face recognition/encoding when liveness is verified
                             face_locations = face_recognition.face_locations(rgb)
                             if len(face_locations) > 0:
@@ -336,8 +375,13 @@ async def websocket_endpoint(websocket: WebSocket):
                                         session_state["mode"] = "verify"
                                     else:
                                         response_data["status"] = f"EXISTS: {enrolled_name}"
-                                        # Reset back to verify mode automatically after exists
                                         session_state["mode"] = "verify"
+                                    # Reset liveness for next enrollment attempt
+                                    session_state["total_blinks"] = 0
+                                    session_state["blink_counter"] = 0
+                                    session_state["head_left"] = False
+                                    session_state["head_right"] = False
+                                    session_state["initial_nose_x"] = None
                                 
                                 # Verify mode
                                 else:
@@ -356,23 +400,47 @@ async def websocket_endpoint(websocket: WebSocket):
                                                 continue
                                                 
                                         if min_distance < 0.45:
-                                            response_data["status"] = "REAL FACE"
-                                            response_data["match_name"] = match_name
-                                            response_data["confidence"] = round((1.0 - min_distance) * 100, 1)
+                                            result_status = "REAL FACE"
+                                            result_confidence = round((1.0 - min_distance) * 100, 1)
+                                            result_name = match_name
                                         else:
-                                            response_data["status"] = "FAKE FACE"
-                                            response_data["match_name"] = "UNKNOWN"
-                                        
-                                        # Reset checklist counters to free CPU and allow new challenges
+                                            result_status = "FAKE FACE"
+                                            result_confidence = 0.0
+                                            result_name = "UNKNOWN"
+
+                                        # Latch the result — freeze blink/head state at the moment of verification
+                                        session_state["latch_status"] = result_status
+                                        session_state["latch_match_name"] = result_name
+                                        session_state["latch_confidence"] = result_confidence
+                                        session_state["latch_blinks"] = session_state["total_blinks"]
+                                        session_state["latch_head_left"] = session_state["head_left"]
+                                        session_state["latch_head_right"] = session_state["head_right"]
+
+                                        # Reset live counters so a new challenge can begin after user clears latch
                                         session_state["total_blinks"] = 0
                                         session_state["blink_counter"] = 0
                                         session_state["head_left"] = False
                                         session_state["head_right"] = False
                                         session_state["initial_nose_x"] = None
+
+                                        response_data["status"] = result_status
+                                        response_data["match_name"] = result_name
+                                        response_data["confidence"] = result_confidence
+                                        response_data["blinks"] = session_state["latch_blinks"]
+                                        response_data["head_left"] = session_state["latch_head_left"]
+                                        response_data["head_right"] = session_state["latch_head_right"]
                                     else:
                                         response_data["status"] = "VAULT EMPTY - ENROLL FIRST"
                             else:
                                 response_data["status"] = "SCANNING"
+                        elif session_state["latch_status"]:
+                            # Latch is active — keep showing the frozen result
+                            response_data["status"] = session_state["latch_status"]
+                            response_data["match_name"] = session_state["latch_match_name"]
+                            response_data["confidence"] = session_state["latch_confidence"]
+                            response_data["blinks"] = session_state["latch_blinks"]
+                            response_data["head_left"] = session_state["latch_head_left"]
+                            response_data["head_right"] = session_state["latch_head_right"]
                         else:
                             response_data["status"] = "SCANNING"
                                     

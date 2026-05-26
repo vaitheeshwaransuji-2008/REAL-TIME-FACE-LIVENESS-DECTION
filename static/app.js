@@ -162,6 +162,7 @@ function showScreen(screenId) {
         isRealFaceLatched = false;
         latchedRealFaceData = null;
         isFakeFaceLatched = false;
+        showTryAgainButton(false);
     }
 }
 
@@ -320,6 +321,10 @@ function handleServerMessage(msg) {
     else if (msg.type === "telemetry") {
         drawHUDOverlay(msg);
         updateTelemetryDashboard(msg);
+    }
+    else if (msg.type === "latch_reset_ack") {
+        logMessage("New liveness challenge started.", "info");
+        showToast("New challenge — blink and turn your head!");
     }
 }
 
@@ -536,60 +541,60 @@ function updateTelemetryDashboard(data) {
     } 
     // Verification state status checks
     else {
-        // Clear latched status if a new challenge begins
-        if (data.blinks > 0 || data.head_left || data.head_right) {
-            if (isRealFaceLatched || isFakeFaceLatched) {
-                isRealFaceLatched = false;
-                latchedRealFaceData = null;
-                isFakeFaceLatched = false;
-                logMessage("New liveness challenge started. Resetting status.", "info");
-            }
-        }
-
         if (data.status === "REAL FACE") {
-            isRealFaceLatched = true;
-            latchedRealFaceData = {
-                match_name: data.match_name,
-                confidence: data.confidence
-            };
-            isFakeFaceLatched = false;
-        } else if (data.status === "FAKE FACE" || data.status === "UNKNOWN IDENTITY") {
-            isRealFaceLatched = false;
-            latchedRealFaceData = null;
-            isFakeFaceLatched = true;
-        }
-
-        if (isRealFaceLatched && latchedRealFaceData) {
-            statusTextEl.textContent = `REAL FACE: ${latchedRealFaceData.match_name.toUpperCase()}`;
+            statusTextEl.textContent = `REAL FACE: ${(data.match_name || "").toUpperCase()}`;
             hudBadgeEl.className = "hud-status-badge success";
             hudStatusDotEl.style.backgroundColor = "var(--success)";
             cameraHudEl.className = "camera-hud real";
-            
+            showTryAgainButton(true);
+
             if (lastStatus !== "REAL FACE") {
                 playSound("success");
-                logMessage(`VERIFIED REAL FACE: ${latchedRealFaceData.match_name} (${latchedRealFaceData.confidence}% confidence)`, "success");
+                logMessage(`VERIFIED REAL FACE: ${data.match_name} (${data.confidence}% confidence)`, "success");
             }
-        } 
-        else if (isFakeFaceLatched) {
+        }
+        else if (data.status === "FAKE FACE" || data.status === "UNKNOWN IDENTITY") {
             statusTextEl.textContent = "SPOOF ALERT / FAKE FACE";
             hudBadgeEl.className = "hud-status-badge error";
             hudStatusDotEl.style.backgroundColor = "var(--error)";
             cameraHudEl.className = "camera-hud spoof";
-            
+            showTryAgainButton(true);
+
             if (lastStatus !== "FAKE FACE") {
                 playSound("fail");
                 logMessage("VERIFICATION ALERT: FAKE FACE DETECTED", "error");
             }
-        } 
+        }
         else {
             statusTextEl.textContent = data.status === "VAULT EMPTY - ENROLL FIRST" ? data.status : "SCANNING";
             hudBadgeEl.className = "hud-status-badge";
             hudStatusDotEl.style.backgroundColor = "var(--primary)";
             cameraHudEl.className = "camera-hud scanning";
+            showTryAgainButton(false);
         }
     }
     
     lastStatus = data.status;
+}
+
+function showTryAgainButton(visible) {
+    let btn = document.getElementById("btnTryAgain");
+    if (!btn) return;
+    btn.style.display = visible ? "inline-flex" : "none";
+}
+
+function handleTryAgain() {
+    playSound("click");
+    showTryAgainButton(false);
+    activeBlinks = 0;
+    document.getElementById("blinkCounter").textContent = "00";
+    updateCheckItem("checkBlink", false, "0 / 1");
+    updateCheckItem("checkLeft", false, "PENDING");
+    updateCheckItem("checkRight", false, "PENDING");
+    logMessage("New liveness challenge initiated.", "info");
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify({ type: "reset_latch" }));
+    }
 }
 
 function updateCheckItem(id, passed, badgeText) {
@@ -790,6 +795,8 @@ window.addEventListener("DOMContentLoaded", () => {
     document.getElementById("btnBackToMenu").addEventListener("click", () => showScreen("menu"));
     document.getElementById("audioToggle").addEventListener("click", toggleAudio);
     document.getElementById("consoleClearBtn").addEventListener("click", clearLogs);
+    const tryAgainBtn = document.getElementById("btnTryAgain");
+    if (tryAgainBtn) tryAgainBtn.addEventListener("click", handleTryAgain);
     
     // Add global key triggers
     window.addEventListener("keydown", handleGlobalKeyEvents);

@@ -396,6 +396,30 @@ body {
     background-color: var(--primary-dim);
 }
 
+/* Try Again button — shown after a verification result is latched */
+.btn-try-again {
+    margin-top: 14px;
+    background-color: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    color: var(--text-muted);
+    padding: 7px 20px;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-try-again:hover {
+    color: var(--primary);
+    border-color: var(--primary);
+    background-color: var(--primary-dim);
+}
+
 header {
     background-color: var(--bg-surface-low);
     border-bottom: 1px solid var(--border);
