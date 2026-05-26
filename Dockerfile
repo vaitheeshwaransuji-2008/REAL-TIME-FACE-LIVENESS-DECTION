@@ -67,5 +67,5 @@ RUN mkdir -p stored_faces \
 
 EXPOSE 8000
 
-# Use a startup script to handle PORT properly
-CMD ["sh", "-c", "uvicorn web_app:app --host 0.0.0.0 --port ${PORT:-8000}"]
+# Use Python to read PORT env variable — avoids shell expansion issues
+CMD ["python", "start.py"]
