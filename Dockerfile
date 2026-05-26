@@ -4,6 +4,7 @@ FROM python:3.9-bullseye
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Cache bust: 2026-05-26-v2
 
 # Install ALL required system libraries including full cmake and boost
 RUN apt-get update && apt-get install -y \
