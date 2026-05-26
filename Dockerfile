@@ -49,11 +49,14 @@ RUN pip install --no-cache-dir \
     "python-multipart==0.0.6"
 
 # Download shape predictor model from official dlib source
-RUN wget -q "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" \
-    -O /tmp/sp.dat.bz2 \
-    && bunzip2 /tmp/sp.dat.bz2 \
-    && mv /tmp/sp.dat shape_predictor_68_face_landmarks.dat \
-    && echo "Model ready: $(du -sh shape_predictor_68_face_landmarks.dat)"
+RUN echo "Downloading shape predictor model..." && \
+    wget --progress=bar:force \
+    "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" \
+    -O /tmp/sp.dat.bz2 && \
+    bunzip2 /tmp/sp.dat.bz2 && \
+    mv /tmp/sp.dat /app/shape_predictor_68_face_landmarks.dat && \
+    ls -lh /app/shape_predictor_68_face_landmarks.dat && \
+    echo "Model download complete"
 
 # Copy project files
 COPY . .

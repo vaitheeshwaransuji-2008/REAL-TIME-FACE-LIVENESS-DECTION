@@ -33,11 +33,24 @@ next_face_id = 1
 
 # Load models
 print("[System] Loading shape predictor model...")
+
+# Auto-download model if missing (fallback for cloud deployments)
 if not os.path.exists(MODEL_PATH):
-    raise FileNotFoundError(
-        f"Shape predictor model not found at: {MODEL_PATH}\n"
-        "Download it from: https://github.com/italojs/facial-landmarks-recognition/raw/master/shape_predictor_68_face_landmarks.dat"
-    )
+    print("[System] Model not found locally, downloading...")
+    import urllib.request
+    import bz2
+    bz2_url = "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2"
+    bz2_path = MODEL_PATH + ".bz2"
+    try:
+        urllib.request.urlretrieve(bz2_url, bz2_path)
+        with bz2.open(bz2_path, "rb") as f_in, open(MODEL_PATH, "wb") as f_out:
+            f_out.write(f_in.read())
+        os.remove(bz2_path)
+        print("[System] Model downloaded successfully.")
+    except Exception as e:
+        print(f"[System] Model download failed: {e}")
+        raise
+
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor(MODEL_PATH)
 print("[System] Models loaded successfully.")
