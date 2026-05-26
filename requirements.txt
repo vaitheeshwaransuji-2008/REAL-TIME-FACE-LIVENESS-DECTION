@@ -1,0 +1,8 @@
+opencv-python
+dlib
+imutils
+numpy
+scipy
+face-recognition
+fastapi
+uvicorn
