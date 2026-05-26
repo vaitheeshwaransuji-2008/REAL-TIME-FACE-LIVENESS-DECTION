@@ -1,58 +1,62 @@
-# Use Python 3.10 slim as base
-FROM python:3.10-slim
+# Use a full Python image (not slim) - has gcc/cmake pre-available
+FROM python:3.10-bullseye
 
-# Install system dependencies needed for dlib, OpenCV, and face_recognition
+# Prevent interactive prompts during apt installs
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install ALL system dependencies in one layer
 RUN apt-get update && apt-get install -y \
     build-essential \
     cmake \
+    git \
+    wget \
+    curl \
     libopenblas-dev \
     liblapack-dev \
     libx11-dev \
-    libgtk-3-dev \
-    libboost-python-dev \
-    libboost-thread-dev \
-    wget \
-    curl \
-    bzip2 \
+    libatlas-base-dev \
+    libboost-all-dev \
+    python3-dev \
+    && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy requirements first for layer caching
-COPY requirements.txt .
+# Step 1: Install numpy first (dlib needs it at build time)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip install --no-cache-dir numpy==1.24.4
 
-# Install Python dependencies
-# Use headless opencv (no display needed on server)
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir \
-        numpy \
-        scipy \
-        imutils \
-        cmake \
-        dlib \
-        face-recognition \
-        opencv-python-headless \
-        fastapi \
-        "uvicorn[standard]" \
-        websockets \
-        python-multipart
+# Step 2: Install dlib from source (no pre-built wheel available for 3.10)
+RUN pip install --no-cache-dir dlib==19.24.2
 
-# Download the shape predictor model at build time
-RUN wget -q "https://github.com/italojs/facial-landmarks-recognition/raw/master/shape_predictor_68_face_landmarks.dat" \
-    -O shape_predictor_68_face_landmarks.dat || \
-    wget -q "https://huggingface.co/spaces/asdasdasdasd/Face-forgery-detection/resolve/main/shape_predictor_68_face_landmarks.dat" \
-    -O shape_predictor_68_face_landmarks.dat
+# Step 3: Install face_recognition and the rest
+RUN pip install --no-cache-dir \
+    scipy==1.11.4 \
+    imutils==0.5.4 \
+    face-recognition==1.3.0 \
+    opencv-python-headless==4.8.1.78 \
+    fastapi==0.104.1 \
+    "uvicorn[standard]==0.24.0" \
+    websockets==12.0 \
+    python-multipart==0.0.6
 
-# Copy the rest of the project
+# Step 4: Download the shape predictor model (bz2 compressed, ~100MB)
+RUN wget -q \
+    "http://dlib.net/files/shape_predictor_68_face_landmarks.dat.bz2" \
+    -O /tmp/shape_predictor.dat.bz2 \
+    && bunzip2 /tmp/shape_predictor.dat.bz2 \
+    && mv /tmp/shape_predictor.dat shape_predictor_68_face_landmarks.dat \
+    && echo "Model downloaded successfully"
+
+# Step 5: Copy project files
 COPY . .
 
-# Create stored_faces directory and ensure metadata file exists
-RUN mkdir -p stored_faces && \
-    if [ ! -f stored_faces/face_metadata.json ]; then echo '{}' > stored_faces/face_metadata.json; fi
+# Ensure stored_faces dir and metadata exist
+RUN mkdir -p stored_faces \
+    && [ -f stored_faces/face_metadata.json ] || echo '{}' > stored_faces/face_metadata.json
 
-# Expose port
 EXPOSE 8000
 
-# Start the FastAPI server
 CMD ["uvicorn", "web_app:app", "--host", "0.0.0.0", "--port", "8000"]

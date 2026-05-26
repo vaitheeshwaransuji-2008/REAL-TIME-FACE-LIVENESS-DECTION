@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.gitignore
+*.bat
+shape_predictor_68_face_landmarks.dat
+stored_faces/*.jpg
+stored_faces/*.png
+README.md
+liveness_detection_themed.py
