@@ -23,6 +23,21 @@ const offscreenCtx = offscreenCanvas.getContext("2d");
 offscreenCanvas.width = 480;
 offscreenCanvas.height = 360;
 
+// Helper for environment network configurations
+function getBackendUrls() {
+    let wsUrl, httpUrl;
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+        const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        wsUrl = `${protocol}//${window.location.host}/ws`;
+        httpUrl = "";
+    } else {
+        // Deployed on Vercel/cloud, connect to local running Python server
+        wsUrl = "ws://127.0.0.1:8000/ws";
+        httpUrl = "http://127.0.0.1:8000";
+    }
+    return { wsUrl, httpUrl };
+}
+
 // Web Audio API Synth Engine
 let audioCtx = null;
 
@@ -211,9 +226,8 @@ function stopCamera() {
 // ---------------- WEBSOCKET FRAME TRANSFERS ----------------
 
 function startWebSocket() {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host || "127.0.0.1:8000";
-    const wsUrl = `${protocol}//${host}/ws`;
+    const urls = getBackendUrls();
+    const wsUrl = urls.wsUrl;
     
     socket = new WebSocket(wsUrl);
     
@@ -330,7 +344,8 @@ function updateIdentityVault(enrolled) {
     enrolled.forEach(person => {
         const card = document.createElement("div");
         card.className = "vault-card";
-        const imgSrc = `/${person.image}?t=${Date.now()}`;
+        const urls = getBackendUrls();
+        const imgSrc = `${urls.httpUrl}/${person.image}?t=${Date.now()}`;
         
         card.innerHTML = `
             <div class="vault-avatar">
@@ -628,9 +643,8 @@ function handleMenuClear() {
     }
     
     // Connect to WS backend briefly to run clear command
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host || "127.0.0.1:8000";
-    const tempSocket = new WebSocket(`${protocol}//${host}/ws`);
+    const urls = getBackendUrls();
+    const tempSocket = new WebSocket(urls.wsUrl);
     
     tempSocket.onopen = () => {
         tempSocket.send(JSON.stringify({
@@ -779,9 +793,8 @@ window.addEventListener("DOMContentLoaded", () => {
     
     // Boot loading of enrolled vaults
     // Fetch initial list via temporary sockets
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const host = window.location.host || "127.0.0.1:8000";
-    const tempSocket = new WebSocket(`${protocol}//${host}/ws`);
+    const urls = getBackendUrls();
+    const tempSocket = new WebSocket(urls.wsUrl);
     tempSocket.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         if (msg.type === "init") {
