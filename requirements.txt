@@ -1,8 +1,11 @@
-opencv-python
-dlib
-imutils
 numpy
 scipy
+imutils
+cmake
+dlib
 face-recognition
+opencv-python-headless
 fastapi
-uvicorn
+uvicorn[standard]
+websockets
+python-multipart

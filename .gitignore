@@ -2,10 +2,21 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyc
 
-# Large files / Model files
+# Large model file - downloaded at Docker build time
 shape_predictor_68_face_landmarks.dat
 
-# Stored faces data (dynamic user data)
-stored_faces/*
+# Stored faces data (runtime user data - not committed)
+stored_faces/*.jpg
+stored_faces/*.png
+
+# Keep the metadata file structure
 !stored_faces/face_metadata.json
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# Launcher script (not needed on server)
+run_project.bat

@@ -14,19 +14,32 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 
 # ---------------- PATHS & FILES ----------------
-FACES_DIR = "stored_faces"
+# Resolve paths relative to this file so they work both locally and in Docker
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FACES_DIR = os.path.join(BASE_DIR, "stored_faces")
 METADATA_FILE = os.path.join(FACES_DIR, "face_metadata.json")
+MODEL_PATH = os.path.join(BASE_DIR, "shape_predictor_68_face_landmarks.dat")
 
 if not os.path.exists(FACES_DIR):
     os.makedirs(FACES_DIR)
+
+# Ensure metadata file exists
+if not os.path.exists(METADATA_FILE):
+    with open(METADATA_FILE, "w") as _f:
+        json.dump({}, _f)
 
 stored_faces = {}  # {face_id: {encoding, name, image_path}}
 next_face_id = 1
 
 # Load models
 print("[System] Loading shape predictor model...")
+if not os.path.exists(MODEL_PATH):
+    raise FileNotFoundError(
+        f"Shape predictor model not found at: {MODEL_PATH}\n"
+        "Download it from: https://github.com/italojs/facial-landmarks-recognition/raw/master/shape_predictor_68_face_landmarks.dat"
+    )
 detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+predictor = dlib.shape_predictor(MODEL_PATH)
 print("[System] Models loaded successfully.")
 
 # ---------------- FUNCTIONS ----------------
@@ -138,6 +151,7 @@ async def get_index():
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     print("[WS] Client connected.")
+    global next_face_id
     
     # State tracking per WebSocket session
     session_state = {
@@ -185,7 +199,6 @@ async def websocket_endpoint(websocket: WebSocket):
             elif msg_type == "clear":
                 # Clear all stored faces
                 stored_faces.clear()
-                global next_face_id
                 next_face_id = 1
                 for file in glob.glob(os.path.join(FACES_DIR, "*.jpg")):
                     try:
@@ -364,4 +377,6 @@ async def websocket_endpoint(websocket: WebSocket):
 # ---------------- SERVER ENTRY ----------------
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("web_app:app", host="127.0.0.1", port=8000, reload=True)
+    port = int(os.environ.get("PORT", 8000))
+    host = "0.0.0.0" if os.environ.get("RAILWAY_ENVIRONMENT") else "127.0.0.1"
+    uvicorn.run("web_app:app", host=host, port=port, reload=False)

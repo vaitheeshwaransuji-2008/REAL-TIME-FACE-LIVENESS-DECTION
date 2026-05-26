@@ -26,14 +26,16 @@ offscreenCanvas.height = 360;
 // Helper for environment network configurations
 function getBackendUrls() {
     let wsUrl, httpUrl;
-    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+    if (isLocal) {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         wsUrl = `${protocol}//${window.location.host}/ws`;
         httpUrl = "";
     } else {
-        // Deployed on Vercel/cloud, connect to local running Python server
-        wsUrl = "ws://127.0.0.1:8000/ws";
-        httpUrl = "http://127.0.0.1:8000";
+        // Deployed on Railway/cloud — connect to the same host the page was served from
+        const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+        wsUrl = `${wsProtocol}//${window.location.host}/ws`;
+        httpUrl = `${window.location.protocol}//${window.location.host}`;
     }
     return { wsUrl, httpUrl };
 }
@@ -168,9 +170,10 @@ function startClocks() {
     setInterval(() => {
         const d = new Date();
         const timeStr = d.toLocaleTimeString();
-        document.getElementById("headerClock").textContent = timeStr;
-        document.getElementById("menuClock").textContent = timeStr;
-        document.getElementById("dashboardClock").textContent = timeStr;
+        const menuClockEl = document.getElementById("menuClock");
+        const dashClockEl = document.getElementById("dashboardClock");
+        if (menuClockEl) menuClockEl.textContent = timeStr;
+        if (dashClockEl) dashClockEl.textContent = timeStr;
     }, 1000);
 }
 
@@ -791,15 +794,28 @@ window.addEventListener("DOMContentLoaded", () => {
     // Add global key triggers
     window.addEventListener("keydown", handleGlobalKeyEvents);
     
-    // Boot loading of enrolled vaults
-    // Fetch initial list via temporary sockets
+    // Boot: try to load enrolled vault count from backend
     const urls = getBackendUrls();
-    const tempSocket = new WebSocket(urls.wsUrl);
-    tempSocket.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "init") {
-            updateIdentityVault(msg.enrolled);
-            tempSocket.close();
-        }
-    };
+    try {
+        const tempSocket = new WebSocket(urls.wsUrl);
+        tempSocket.onopen = () => {
+            logMessage("Backend connection established.", "success");
+        };
+        tempSocket.onmessage = (e) => {
+            try {
+                const msg = JSON.parse(e.data);
+                if (msg.type === "init") {
+                    updateIdentityVault(msg.enrolled);
+                    tempSocket.close();
+                }
+            } catch (err) {
+                console.warn("Boot socket parse error:", err);
+            }
+        };
+        tempSocket.onerror = () => {
+            logMessage("Backend not reachable. Start the Python server first.", "error");
+        };
+    } catch (e) {
+        logMessage("Could not connect to backend server.", "error");
+    }
 });
