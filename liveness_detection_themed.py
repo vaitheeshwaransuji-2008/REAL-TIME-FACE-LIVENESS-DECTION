@@ -657,10 +657,10 @@ def main():
                     elif display_status == "NO FACES STORED":
                         cv2.putText(frame, "NO FACES STORED", (100, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, THEME["warning_orange"], 3)
 
-                        current_face_status = display_status
-                        status_update_counter += 1
-                        if status_update_counter % 30 == 0:
-                            print_status(current_mode, total_blinks, head_left, head_right, display_status, len(stored_faces))
+                    current_face_status = display_status
+                    status_update_counter += 1
+                    if status_update_counter % 30 == 0:
+                        print_status(current_mode, total_blinks, head_left, head_right, display_status, len(stored_faces))
                 except Exception as e:
                     print(f"\033[91mProcessing error: {e}\033[0m")
 
