@@ -1,0 +1,11 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large files / Model files
+shape_predictor_68_face_landmarks.dat
+
+# Stored faces data (dynamic user data)
+stored_faces/*
+!stored_faces/face_metadata.json
