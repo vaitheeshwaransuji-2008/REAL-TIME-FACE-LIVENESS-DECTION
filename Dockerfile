@@ -59,4 +59,5 @@ RUN mkdir -p stored_faces \
 
 EXPOSE 8000
 
-CMD ["uvicorn", "web_app:app", "--host", "0.0.0.0", "--port", "8000"]
+# Railway injects $PORT dynamically — use shell form so the variable is expanded
+CMD uvicorn web_app:app --host 0.0.0.0 --port ${PORT:-8000}

@@ -378,5 +378,4 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
-    host = "0.0.0.0" if os.environ.get("RAILWAY_ENVIRONMENT") else "127.0.0.1"
-    uvicorn.run("web_app:app", host=host, port=port, reload=False)
+    uvicorn.run("web_app:app", host="0.0.0.0", port=port, reload=False)
